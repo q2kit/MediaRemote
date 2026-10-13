@@ -1,0 +1,306 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "About": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thông tin"
+          }
+        }
+      }
+    },
+    "Allow Local Network access for the app in Settings › Privacy & Security › Local Network.": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cho phép ứng dụng truy cập Mạng cục bộ trong Cài đặt › Quyền riêng tư & Bảo mật › Mạng cục bộ."
+          }
+        }
+      }
+    },
+    "Auto-connect to last device": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tự động kết nối với thiết bị sau cùng"
+          }
+        }
+      }
+    },
+    "Automatically connect to the last device when available.": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tự động kết nối tới thiết bị sau cùng khi có thể."
+          }
+        }
+      }
+    },
+    "Available devices": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Có thể kết nối"
+          }
+        }
+      }
+    },
+    "Connecting…": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Đang kết nối…"
+          }
+        }
+      }
+    },
+    "Disconnected": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mất kết nối"
+          }
+        }
+      }
+    },
+    "Display name": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tên hiển thị"
+          }
+        }
+      }
+    },
+    "Done": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Xong"
+          }
+        }
+      }
+    },
+    "Enter the PIN to connect to “%@”.": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nhập mã PIN để kết nối với “%@”."
+          }
+        }
+      }
+    },
+    "Forget": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quên"
+          }
+        }
+      }
+    },
+    "Forget this device": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quên thiết bị này"
+          }
+        }
+      }
+    },
+    "Lost connection to %@.": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mất kết nối với %@."
+          }
+        }
+      }
+    },
+    "Make sure your iPhone and Mac are on the same Wi‑Fi network and Media Remote is running on your Mac.": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Đảm bảo iPhone và Mac của bạn đang ở cùng mạng Wi‑Fi và ứng dụng Media Remote đang chạy trên Mac."
+          }
+        }
+      }
+    },
+    "Media Remote": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Media Remote"
+          }
+        }
+      }
+    },
+    "My devices": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thiết bị của tôi"
+          }
+        }
+      }
+    },
+    "Next": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bài tiếp theo"
+          }
+        }
+      }
+    },
+    "Nothing playing": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Không có gì đang phát"
+          }
+        }
+      }
+    },
+    "Offline": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ngoại tuyến"
+          }
+        }
+      }
+    },
+    "Online": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trực tuyến"
+          }
+        }
+      }
+    },
+    "Pause": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tạm dừng"
+          }
+        }
+      }
+    },
+    "Play": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Phát"
+          }
+        }
+      }
+    },
+    "Previous": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bài trước"
+          }
+        }
+      }
+    },
+    "Reconnect": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kết nối lại"
+          }
+        }
+      }
+    },
+    "Searching…": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Đang tìm kiếm..."
+          }
+        }
+      }
+    },
+    "Settings": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cài đặt"
+          }
+        }
+      }
+    },
+    "Sound output": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Đầu ra âm thanh"
+          }
+        }
+      }
+    },
+    "The name shown in the device list on your Mac.": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tên hiển thị trong danh sách thiết bị trên Mac."
+          }
+        }
+      }
+    },
+    "Version": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Phiên bản"
+          }
+        }
+      }
+    },
+    "Wrong PIN": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sai mã PIN"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}
