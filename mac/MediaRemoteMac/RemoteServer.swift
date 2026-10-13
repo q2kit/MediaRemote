@@ -17,7 +17,8 @@ final class RemoteServer: ObservableObject {
     /// MediaRemote is unavailable, and volume when the output has no software volume (HDMI etc.).
     @Published private(set) var needsAccessibility = RemoteServer.computeNeedsAccessibility()
 
-    let serviceName = Host.current().localizedName ?? "Mac"
+    /// The computer name; `-serviceName "…"` at launch overrides it (for demos and screenshots).
+    let serviceName = UserDefaults.standard.string(forKey: "serviceName") ?? Host.current().localizedName ?? "Mac"
 
     private final class Session {
         let line: LineConnection

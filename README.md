@@ -7,6 +7,34 @@ Gồm hai ứng dụng:
 - **Mac** — ứng dụng trên thanh menu, nhận kết nối từ iPhone và điều khiển hệ thống.
 - **iPhone** — tìm Mac qua Bonjour, ghép đôi bằng mã PIN 6 số, rồi điều khiển.
 
+## Ảnh chụp
+
+Ảnh dùng dữ liệu demo; bản sáng/tối hiển thị theo giao diện GitHub của bạn.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/ios-remote-dark.png">
+    <img src="docs/screenshots/ios-remote-light.png" width="260" alt="Màn hình điều khiển trên iPhone">
+  </picture>
+  &nbsp;
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/ios-devices-dark.png">
+    <img src="docs/screenshots/ios-devices-light.png" width="260" alt="Danh sách thiết bị trên iPhone">
+  </picture>
+</p>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/mac-menu-dark.png">
+    <img src="docs/screenshots/mac-menu-light.png" width="306" alt="Menu trên thanh menu của Mac">
+  </picture>
+  &nbsp;
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/mac-about-dark.png">
+    <img src="docs/screenshots/mac-about-light.png" width="319" alt="Cửa sổ thông tin trên Mac">
+  </picture>
+</p>
+
 ## Cấu trúc
 
 ```
@@ -16,6 +44,7 @@ mac/         MediaRemoteMac.xcodeproj
   MediaRemoteHelper/   dylib Objective-C đọc thông tin Now Playing (xem bên dưới)
 iphone/      MediaRemote.xcodeproj — ứng dụng SwiftUI
 tools/       make-icon.swift — vẽ icon cho cả hai ứng dụng
+docs/        Ảnh chụp màn hình cho README
 ```
 
 ## Yêu cầu
@@ -36,6 +65,12 @@ xcodebuild -project mac/MediaRemoteMac.xcodeproj -scheme MediaRemoteMac build
 xcodebuild -project iphone/MediaRemote.xcodeproj -scheme MediaRemote \
   -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
   CODE_SIGNING_ALLOWED=NO build
+```
+
+Khi chụp ảnh demo, có thể đặt tên máy và mã PIN qua tham số khởi động (không ghi vào cài đặt):
+
+```sh
+open -n MediaRemoteMac.app --args -serviceName "MacBook Pro" -pairingPIN 123456
 ```
 
 ### Ký ứng dụng
