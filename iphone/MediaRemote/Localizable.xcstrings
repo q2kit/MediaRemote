@@ -21,6 +21,16 @@
         }
       }
     },
+    "Artwork": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ảnh bìa"
+          }
+        }
+      }
+    },
     "Auto-connect to last device": {
       "localizations": {
         "vi": {

@@ -40,8 +40,13 @@ struct RemoteView: View {
 /// Fixed layout: everything below the artwork has a constant height, so controls never move
 /// because of the track (long titles scroll, missing info keeps its space). The artwork takes
 /// whatever height is left, which depends only on the screen.
+///
+/// Tapping the artwork switches between the cover and a spinning disc.
 private struct ControlsView: View {
     @ObservedObject var client: RemoteClient
+    @AppStorage("showsDisc") private var showsDisc = false
+    @State private var discSpin = DiscSpin()
+    @State private var discStyle = DiscStyle.allCases.randomElement()!
     @State private var sliderValue = 0.0
     @State private var isDragging = false
     @State private var tapCount = 0
@@ -52,7 +57,7 @@ private struct ControlsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ArtworkView(image: client.artwork)
+            artwork
                 .frame(maxWidth: 360, maxHeight: .infinity)
                 .padding(.horizontal, 32)
                 .padding(.top, 16)
@@ -68,6 +73,7 @@ private struct ControlsView: View {
             .padding(.bottom, 16)
         }
         .sensoryFeedback(.impact(weight: .light), trigger: tapCount)
+        .sensoryFeedback(.selection, trigger: showsDisc)
         .toolbar {
             if client.outputs.count > 1 {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -75,10 +81,37 @@ private struct ControlsView: View {
                 }
             }
         }
-        .onAppear { sliderValue = client.volume ?? 0 }
+        .onAppear {
+            sliderValue = client.volume ?? 0
+            discSpin.setPlaying(client.isPlaying == true)
+        }
         .onChange(of: client.volume) { _, volume in
             if !isDragging, let volume { sliderValue = volume }
         }
+        .onChange(of: client.isPlaying) { _, playing in
+            discSpin.setPlaying(playing == true)
+        }
+    }
+
+    private var artwork: some View {
+        Group {
+            if showsDisc {
+                DiscView(image: client.artwork, style: discStyle, spin: discSpin)
+                    .transition(.scale(scale: 0.85).combined(with: .opacity))
+            } else {
+                ArtworkView(image: client.artwork)
+                    .transition(.scale(scale: 0.85).combined(with: .opacity))
+            }
+        }
+        .onTapGesture {
+            if !showsDisc {
+                discStyle = DiscStyle.allCases.filter { $0 != discStyle }.randomElement()!
+            }
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { showsDisc.toggle() }
+        }
+        .accessibilityElement()
+        .accessibilityLabel("Artwork")
+        .accessibilityAddTraits(.isButton)
     }
 
     private var transportControls: some View {
@@ -211,6 +244,152 @@ private struct ArtworkView: View {
             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             .shadow(color: .black.opacity(0.2), radius: 16, y: 8)
             .animation(.default, value: image)
+    }
+}
+
+/// How far the disc has turned: spin time before the current play stretch, and when that
+/// stretch started (nil while paused). Kept outside the view so switching to the cover and
+/// back doesn't reset it.
+private struct DiscSpin {
+    static let secondsPerTurn = 12.0
+
+    private var spunBefore: TimeInterval = 0
+    private(set) var playingSince: Date?
+
+    mutating func setPlaying(_ playing: Bool) {
+        if playing {
+            if playingSince == nil { playingSince = Date() }
+        } else {
+            spunBefore = spin(at: Date())
+            playingSince = nil
+        }
+    }
+
+    func angle(at date: Date) -> Angle {
+        .degrees(spin(at: date) / Self.secondsPerTurn * 360)
+    }
+
+    private func spin(at date: Date) -> TimeInterval {
+        spunBefore + (playingSince.map { date.timeIntervalSince($0) } ?? 0)
+    }
+}
+
+/// Looks for the disc; a different one is picked at random each time the disc is shown.
+private enum DiscStyle: CaseIterable {
+    case black, red, blue, gold, cd
+
+    var surface: AnyShapeStyle {
+        switch self {
+        case .black:
+            AnyShapeStyle(Color(white: 0.08))
+        case .red:
+            AnyShapeStyle(EllipticalGradient(colors: [Color(red: 0.85, green: 0.12, blue: 0.16), Color(red: 0.42, green: 0.02, blue: 0.06)], startRadiusFraction: 0.15, endRadiusFraction: 0.5))
+        case .blue:
+            AnyShapeStyle(EllipticalGradient(colors: [Color(red: 0.16, green: 0.45, blue: 0.9), Color(red: 0.04, green: 0.12, blue: 0.4)], startRadiusFraction: 0.15, endRadiusFraction: 0.5))
+        case .gold:
+            AnyShapeStyle(AngularGradient(colors: [
+                Color(red: 0.95, green: 0.82, blue: 0.45), Color(red: 0.6, green: 0.45, blue: 0.15),
+                Color(red: 0.98, green: 0.88, blue: 0.55), Color(red: 0.55, green: 0.4, blue: 0.12),
+                Color(red: 0.95, green: 0.82, blue: 0.45),
+            ], center: .center))
+        case .cd:
+            // Silver with the rainbow sheen of the data side.
+            AnyShapeStyle(AngularGradient(colors: [
+                Color(white: 0.86), Color(red: 0.95, green: 0.8, blue: 0.9), Color(red: 0.75, green: 0.92, blue: 0.95),
+                Color(white: 0.9), Color(red: 0.96, green: 0.94, blue: 0.75), Color(red: 0.8, green: 0.85, blue: 0.98),
+                Color(white: 0.86),
+            ], center: .center, angle: .degrees(20)))
+        }
+    }
+
+    /// Grooves for records, a few faint tracks for the CD.
+    var grooveCount: Int { self == .cd ? 3 : 14 }
+
+    var grooveColor: Color {
+        switch self {
+        case .black: .white
+        case .red, .blue: .black
+        case .gold: Color(red: 0.35, green: 0.25, blue: 0.05)
+        case .cd: .white
+        }
+    }
+
+    var grooveOpacity: (strong: Double, faint: Double) {
+        switch self {
+        case .black: (0.09, 0.04)
+        case .red, .blue: (0.22, 0.1)
+        case .gold: (0.3, 0.14)
+        case .cd: (0.5, 0.5)
+        }
+    }
+}
+
+/// A disc with the cover art as its label. Only the label shows the turning (the surface and its
+/// reflection look the same at any angle).
+private struct DiscView: View {
+    let image: UIImage?
+    let style: DiscStyle
+    let spin: DiscSpin
+
+    var body: some View {
+        Color.clear
+            .aspectRatio(1, contentMode: .fit)
+            .overlay {
+                GeometryReader { geometry in
+                    let size = min(geometry.size.width, geometry.size.height)
+                    ZStack {
+                        Circle()
+                            .fill(style.surface)
+                        ForEach(0..<style.grooveCount, id: \.self) { groove in
+                            let opacity = groove.isMultiple(of: 4) ? style.grooveOpacity.strong : style.grooveOpacity.faint
+                            Circle()
+                                .inset(by: size * (0.04 + CGFloat(groove) * (style == .cd ? 0.1 : 0.022)))
+                                .stroke(style.grooveColor.opacity(opacity), lineWidth: 0.6)
+                        }
+                        // Light reflected off the surface stays put while the disc turns.
+                        Circle()
+                            .fill(AngularGradient(
+                                colors: [.clear, .white.opacity(0.16), .clear, .clear, .white.opacity(0.12), .clear, .clear],
+                                center: .center,
+                                angle: .degrees(-30)
+                            ))
+                        if style == .cd {
+                            // The clear plastic hub.
+                            Circle()
+                                .fill(.white.opacity(0.35))
+                                .frame(width: size * 0.44, height: size * 0.44)
+                        }
+                        TimelineView(.animation(paused: spin.playingSince == nil)) { context in
+                            label
+                                .frame(width: size * 0.38, height: size * 0.38)
+                                .clipShape(Circle())
+                                .rotationEffect(spin.angle(at: context.date))
+                        }
+                        Circle()
+                            .fill(Color(.systemBackground))
+                            .frame(width: size * 0.035, height: size * 0.035)
+                    }
+                    .frame(width: size, height: size)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+            .shadow(color: .black.opacity(0.25), radius: 16, y: 8)
+    }
+
+    @ViewBuilder
+    private var label: some View {
+        if let image {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+        } else {
+            ZStack {
+                LinearGradient(colors: [.pink.opacity(0.7), .purple.opacity(0.8)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                Image(systemName: "music.note")
+                    .font(.system(size: 28, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.85))
+            }
+        }
     }
 }
 
