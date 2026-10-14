@@ -49,7 +49,6 @@ private struct ControlsView: View {
     @State private var previousTaps = 0
     @State private var playTaps = 0
     @State private var nextTaps = 0
-    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         VStack(spacing: 0) {
@@ -69,12 +68,6 @@ private struct ControlsView: View {
             .padding(.bottom, 16)
         }
         .sensoryFeedback(.impact(weight: .light), trigger: tapCount)
-        .background {
-            HardwareVolumeButtons(isActive: scenePhase == .active) { up in
-                send(up ? .volumeUp : .volumeDown)
-            }
-            .frame(width: 1, height: 1)
-        }
         .toolbar {
             if client.outputs.count > 1 {
                 ToolbarItem(placement: .topBarTrailing) {

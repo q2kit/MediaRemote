@@ -89,7 +89,6 @@ open -n MediaRemoteMac.app --args -serviceName "MacBook Pro" -pairingPIN 123456
 - **Giao thức**: mỗi message là một dòng JSON (`RemoteMessage`). iPhone gửi `hello` kèm PIN; Mac trả `welcome` + `state`, hoặc `denied` rồi ngắt. Sau đó Mac đẩy `state` khi có thay đổi, ảnh bìa gửi riêng bằng `artwork`. Hai ứng dụng dùng chung file nên thay đổi giao thức phải giữ tương thích.
 - **Now Playing**: từ macOS 15.4, MediaRemote chỉ trả thông tin cho tiến trình do Apple ký. Ứng dụng Mac chạy `/usr/bin/perl` và nạp `libMediaRemoteHelper.dylib` vào đó; helper ghi JSON ra stdout và nhận lệnh `seek` qua stdin. Đây là API riêng nên có thể hỏng ở bản macOS sau — khi đó điều khiển vẫn hoạt động, chỉ mất thông tin bài đang phát.
 - **Điều khiển phát**: gửi qua `MRMediaRemoteSendCommand` (không cần quyền); phím media giả lập chỉ là dự phòng. Âm lượng và đầu ra âm thanh dùng CoreAudio.
-- **Nút âm lượng iPhone**: iOS không có API chính thức. Ứng dụng theo dõi `AVAudioSession.outputVolume` và đặt lại âm lượng iPhone về giữa qua một `MPVolumeView` ẩn; âm lượng gốc được trả lại khi rời màn hình điều khiển.
 - **Bảo mật**: một mã PIN dùng chung cho mọi thiết bị, lưu trong `UserDefaults`; kết nối chưa mã hoá. Đủ cho dùng trong mạng nhà, chưa phù hợp mạng công cộng.
 - **Ngôn ngữ**: tiếng Anh (gốc) và tiếng Việt qua String Catalog (`Localizable.xcstrings`, `InfoPlist.xcstrings`).
 
