@@ -111,6 +111,16 @@
         }
       }
     },
+    "Follow system": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Theo hệ thống"
+          }
+        }
+      }
+    },
     "Forget": {
       "localizations": {
         "vi": {
@@ -157,6 +167,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Media Remote"
+          }
+        }
+      }
+    },
+    "Mute": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tắt tiếng"
           }
         }
       }
@@ -287,6 +307,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tên hiển thị trong danh sách thiết bị trên Mac."
+          }
+        }
+      }
+    },
+    "This device has no volume control.": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thiết bị này không chỉnh được âm lượng."
+          }
+        }
+      }
+    },
+    "Unmute": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bật tiếng"
           }
         }
       }

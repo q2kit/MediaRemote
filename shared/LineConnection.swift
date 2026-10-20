@@ -1,16 +1,16 @@
 import Foundation
 import Network
 
-/// Wraps an `NWConnection` and exchanges newline-delimited JSON `RemoteMessage`s.
-/// All callbacks are delivered on the main queue.
-final class LineConnection {
+/// Wraps an `NWConnection` and exchanges newline-delimited JSON messages (`RemoteMessage` with the
+/// iPhone, SoundControl's messages on the Mac). All callbacks are delivered on the main queue.
+final class LineConnection<Message: Codable> {
     let connection: NWConnection
-    var onMessage: ((RemoteMessage) -> Void)?
+    var onMessage: ((Message) -> Void)?
     var onStateChange: ((NWConnection.State) -> Void)?
 
     private var buffer = Data()
     /// Large enough for a base64-encoded artwork JPEG.
-    private static let maxFrameSize = 2 * 1024 * 1024
+    private static var maxFrameSize: Int { 2 * 1024 * 1024 }
 
     init(_ connection: NWConnection) {
         self.connection = connection
@@ -24,7 +24,7 @@ final class LineConnection {
         receive()
     }
 
-    func send(_ message: RemoteMessage) {
+    func send(_ message: Message) {
         guard var data = try? JSONEncoder().encode(message) else { return }
         data.append(0x0A)
         connection.send(content: data, completion: .contentProcessed { _ in })
@@ -53,7 +53,7 @@ final class LineConnection {
         while let newline = buffer.firstIndex(of: 0x0A) {
             let line = buffer[buffer.startIndex..<newline]
             buffer.removeSubrange(buffer.startIndex...newline)
-            if let message = try? JSONDecoder().decode(RemoteMessage.self, from: line) {
+            if let message = try? JSONDecoder().decode(Message.self, from: line) {
                 onMessage?(message)
             }
         }

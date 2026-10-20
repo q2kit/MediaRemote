@@ -33,8 +33,26 @@ final class NowPlayingMonitor {
         }
     }
 
+    /// An app with a Now Playing session, whether or not it's the one being controlled.
+    struct Source: Equatable {
+        var id: String
+        /// The app it belongs to, when the session comes from a web app or a helper of another app.
+        var parentID: String?
+        var name: String
+        var isPlaying: Bool
+        var title: String?
+    }
+
     /// nil when unknown (nothing playing, or the helper can't read Now Playing).
     private(set) var info: Info?
+    /// Bundle identifier of the app playback commands go to.
+    private(set) var nowPlayingID: String?
+    /// Sorted by name, so the list doesn't reshuffle as apps take turns playing.
+    private(set) var sources: [Source] = []
+    /// The app picked with `selectSource(_:)`; nil while macOS decides. The helper drops the pick by
+    /// itself once the Mac is used directly (see MediaRemoteHelper.m).
+    private(set) var selectedSourceID: String?
+    private(set) var canSelectSource = false
     /// JPEG, scaled down for sending to the phone.
     private(set) var artwork: Data?
     var onChange: (() -> Void)?
@@ -74,7 +92,20 @@ final class NowPlayingMonitor {
     }
 
     func seek(to seconds: Double) {
-        guard let data = String(format: "seek %.3f\n", max(seconds, 0)).data(using: .utf8) else { return }
+        sendToHelper(String(format: "seek %.3f", max(seconds, 0)))
+    }
+
+    /// Makes `id` the app that playback commands (and the Mac's media keys) go to, or with nil lets
+    /// macOS decide again.
+    func selectSource(_ id: String?) {
+        guard canSelectSource, id != selectedSourceID else { return }
+        selectedSourceID = id
+        sendToHelper(id.map { "select \($0)" } ?? "select")
+        onChange?()
+    }
+
+    private func sendToHelper(_ command: String) {
+        guard let data = (command + "\n").data(using: .utf8) else { return }
         try? commandPipe?.fileHandleForWriting.write(contentsOf: data)
     }
 
@@ -109,6 +140,8 @@ final class NowPlayingMonitor {
             try process.run()
             self.process = process
             self.commandPipe = commandPipe
+            // A new helper starts by clearing any override, so pick the source again.
+            if let selectedSourceID { sendToHelper("select \(selectedSourceID)") }
         } catch {
             info = nil
         }
@@ -136,6 +169,17 @@ final class NowPlayingMonitor {
         var timestamp: Double?
         var artworkChanged: Bool?
         var artwork: String?
+        var clients: [Client]?
+        var selected: String?
+        var selectable: Bool?
+
+        struct Client: Decodable {
+            var id: String
+            var parent: String?
+            var name: String
+            var playing: Bool
+            var title: String?
+        }
     }
 
     private func update(_ payload: Payload) {
@@ -162,8 +206,20 @@ final class NowPlayingMonitor {
                 timestamp: payload.timestamp.map(Date.init(timeIntervalSince1970:))
             )
         }
-        guard newInfo != info else { return }
+        let newSources = (payload.clients ?? [])
+            .map { Source(id: $0.id, parentID: $0.parent, name: $0.name, isPlaying: $0.playing,
+                          title: $0.title.flatMap { $0.isEmpty ? nil : $0 }) }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        let newNowPlayingID = payload.available ? payload.bundleID : nil
+
+        guard newInfo != info || newSources != sources || newNowPlayingID != nowPlayingID
+            || payload.selected != selectedSourceID || (payload.selectable == true) != canSelectSource
+        else { return }
         info = newInfo
+        sources = newSources
+        nowPlayingID = newNowPlayingID
+        selectedSourceID = payload.selected
+        canSelectSource = payload.selectable == true
         onChange?()
     }
 
