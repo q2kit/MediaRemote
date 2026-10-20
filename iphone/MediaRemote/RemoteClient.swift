@@ -25,13 +25,25 @@ final class RemoteClient: ObservableObject {
     @Published private(set) var artwork: UIImage?
     @Published private(set) var outputs: [AudioOutput] = []
     @Published private(set) var outputID: String?
+    /// Apps on the Mac that can be picked; nil when the Mac doesn't offer a choice.
+    @Published private(set) var sources: [MediaSource]?
+    /// The picked app, nil while following whatever the Mac plays.
+    @Published private(set) var sourceID: String?
+    /// The app the controls act on right now.
+    @Published private(set) var nowPlayingID: String?
+    /// True when the volume is that app's own (SoundControl on the Mac), not the Mac's.
+    @Published private(set) var appVolume = false
+    @Published private(set) var appOutputName: String?
+    /// With `appVolume`: the volume of the device that app plays on, shared with every app there.
+    @Published private(set) var outputVolume: Double?
+    @Published private(set) var outputMuted = false
     /// Position reported by the Mac, the moment we received it, and how fast it advances.
     @Published private var elapsedAnchor: (elapsed: Double, date: Date, rate: Double)?
     /// After a seek, states sent before the Mac applied it would snap the position back.
     private var seekPendingUntil: Date?
 
     let mac: DiscoveredMac
-    private var line: LineConnection?
+    private var line: LineConnection<RemoteMessage>?
     private var pendingPIN: String?
 
     init(mac: DiscoveredMac) {
@@ -58,7 +70,7 @@ final class RemoteClient: ObservableObject {
 
         let parameters = NWParameters.tcp
         parameters.includePeerToPeer = true
-        let line = LineConnection(NWConnection(to: mac.endpoint, using: parameters))
+        let line = LineConnection<RemoteMessage>(NWConnection(to: mac.endpoint, using: parameters))
         line.onStateChange = { [weak self, weak line] state in
             guard let self, let line, line === self.line else { return }
             connectionStateChanged(state, line: line)
@@ -90,8 +102,12 @@ final class RemoteClient: ObservableObject {
     func send(_ command: RemoteCommand, value: Double? = nil) {
         guard status == .connected else { return }
         line?.send(.command(command, value: value))
+        // Shown right away; the Mac confirms with its next state. Turning up also unmutes there.
         if command == .setVolume, let value {
             volume = value
+            if value > 0 { muted = false }
+        } else if command == .toggleMute {
+            muted.toggle()
         }
     }
 
@@ -112,10 +128,54 @@ final class RemoteClient: ObservableObject {
         elapsedAnchor = elapsed.map { ($0, Date(), rate) }
     }
 
-    func selectOutput(_ id: String) {
+    /// With `appVolume`, nil sends the app back to the Mac's own output.
+    func selectOutput(_ id: String?) {
         guard status == .connected, id != outputID else { return }
         line?.send(.command(.selectOutput, outputID: id))
         outputID = id
+    }
+
+    func setOutputVolume(_ value: Double) {
+        guard status == .connected else { return }
+        line?.send(.command(.setOutputVolume, value: value))
+        outputVolume = value
+        if value > 0 { outputMuted = false }
+    }
+
+    func setOutputMuted(_ muted: Bool) {
+        guard status == .connected else { return }
+        line?.send(.command(.setOutputMuted, muted: muted))
+        outputMuted = muted
+    }
+
+    /// The app the controls act on: the picked one, or whatever the Mac follows before anything is picked.
+    var currentSourceID: String? {
+        sourceID ?? nowPlayingID
+    }
+
+    /// Picks the next (`step` 1) or previous (-1) app, in the order the Mac lists them. False when
+    /// there's none that way.
+    @discardableResult
+    func selectAdjacentSource(_ step: Int) -> Bool {
+        guard let id = adjacentSourceID(step) else { return false }
+        selectSource(id)
+        return true
+    }
+
+    func canSelectAdjacentSource(_ step: Int) -> Bool {
+        adjacentSourceID(step) != nil
+    }
+
+    private func adjacentSourceID(_ step: Int) -> String? {
+        guard let sources, !sources.isEmpty else { return nil }
+        let index = sources.firstIndex { $0.id == currentSourceID } ?? (step > 0 ? -1 : sources.count)
+        return sources.indices.contains(index + step) ? sources[index + step].id : nil
+    }
+
+    func selectSource(_ id: String?) {
+        guard status == .connected, id != sourceID else { return }
+        line?.send(.command(.selectSource, sourceID: id))
+        sourceID = id
     }
 
     /// Playback position extrapolated to `date`.
@@ -126,7 +186,7 @@ final class RemoteClient: ObservableObject {
         return max(elapsed, 0)
     }
 
-    private func connectionStateChanged(_ state: NWConnection.State, line: LineConnection) {
+    private func connectionStateChanged(_ state: NWConnection.State, line: LineConnection<RemoteMessage>) {
         switch state {
         case .ready:
             line.send(.hello(pin: pendingPIN ?? "", deviceName: DeviceName.current))
@@ -168,6 +228,13 @@ final class RemoteClient: ObservableObject {
             updateElapsed(message.elapsed, rate: message.rate ?? 0)
             outputs = message.outputs ?? []
             outputID = message.outputID
+            sources = message.sources
+            sourceID = message.sourceID
+            nowPlayingID = message.nowPlayingID
+            appVolume = message.appVolume ?? false
+            appOutputName = message.appOutputName
+            outputVolume = message.outputVolume
+            outputMuted = message.outputMuted ?? false
         case .artwork:
             artwork = message.artwork.flatMap(UIImage.init(data:))
         default:

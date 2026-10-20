@@ -21,13 +21,14 @@ final class RemoteServer: ObservableObject {
     let serviceName = UserDefaults.standard.string(forKey: "serviceName") ?? Host.current().localizedName ?? "Mac"
 
     private final class Session {
-        let line: LineConnection
+        let line: LineConnection<RemoteMessage>
         var deviceName: String?
         var isAuthenticated = false
-        init(_ line: LineConnection) { self.line = line }
+        init(_ line: LineConnection<RemoteMessage>) { self.line = line }
     }
 
     private let nowPlaying = NowPlayingMonitor()
+    let soundControl = SoundControlLink()
     private var listener: NWListener?
     private var sessions: [ObjectIdentifier: Session] = [:]
     private var pollTimer: Timer?
@@ -55,6 +56,9 @@ final class RemoteServer: ObservableObject {
         }
         nowPlaying.onArtworkChange = { [weak self] in
             self?.broadcastArtwork()
+        }
+        soundControl.onChange = { [weak self] in
+            self?.broadcastStateIfChanged()
         }
         nowPlaying.start()
         if needsAccessibility {
@@ -167,6 +171,11 @@ final class RemoteServer: ObservableObject {
     private func remove(_ id: ObjectIdentifier) {
         guard sessions.removeValue(forKey: id) != nil else { return }
         refreshClients()
+        // Picking a source changes how the whole Mac's media keys behave; only keep that up while
+        // someone is holding the remote.
+        if clients.isEmpty {
+            nowPlaying.selectSource(nil)
+        }
     }
 
     private func refreshClients() {
@@ -182,7 +191,8 @@ final class RemoteServer: ObservableObject {
             authenticate(session, pin: message.pin, deviceName: message.deviceName)
         case .command:
             guard session.isAuthenticated, let command = message.command else { return }
-            perform(command, value: message.value, outputID: message.outputID)
+            perform(command, value: message.value, muted: message.muted, outputID: message.outputID,
+                    sourceID: message.sourceID)
         default:
             break
         }
@@ -210,7 +220,7 @@ final class RemoteServer: ObservableObject {
 
     // MARK: - Commands
 
-    private func perform(_ command: RemoteCommand, value: Double?, outputID: String?) {
+    private func perform(_ command: RemoteCommand, value: Double?, muted: Bool?, outputID: String?, sourceID: String?) {
         switch command {
         case .playPause:
             transport(.togglePlayPause, fallbackKey: .play)
@@ -219,31 +229,78 @@ final class RemoteServer: ObservableObject {
         case .previous:
             transport(.previousTrack, fallbackKey: .previous)
         case .volumeUp:
+            if let app = volumeApp, let settings = soundControl.settings(of: app) {
+                soundControl.setVolume(settings.volume + SystemVolume.step, of: app)
+                break
+            }
             if let volume = SystemVolume.volume, SystemVolume.setVolume(volume + SystemVolume.step) {
                 break
             }
             MediaKeys.press(.soundUp)
         case .volumeDown:
+            if let app = volumeApp, let settings = soundControl.settings(of: app) {
+                soundControl.setVolume(settings.volume - SystemVolume.step, of: app)
+                break
+            }
             if let volume = SystemVolume.volume, SystemVolume.setVolume(volume - SystemVolume.step) {
                 break
             }
             MediaKeys.press(.soundDown)
         case .toggleMute:
+            if let app = volumeApp, let settings = soundControl.settings(of: app) {
+                soundControl.setMuted(!settings.muted, of: app)
+                break
+            }
             if let muted = SystemVolume.isMuted, SystemVolume.setMuted(!muted) {
                 break
             }
             MediaKeys.press(.mute)
         case .setVolume:
             guard let value else { return }
-            SystemVolume.setVolume(Float(value))
+            if let app = volumeApp {
+                soundControl.setVolume(Float(value), of: app)
+            } else {
+                SystemVolume.setVolume(Float(value))
+            }
         case .seek:
             guard let value else { return }
             nowPlaying.seek(to: value)
         case .selectOutput:
-            guard let outputID else { return }
-            AudioOutputs.select(id: outputID)
+            if let app = volumeApp {
+                soundControl.setDevice(outputID, of: app)
+            } else if let outputID {
+                AudioOutputs.select(id: outputID)
+            }
+        case .selectSource:
+            nowPlaying.selectSource(sourceID)
+        case .setOutputVolume:
+            guard let value else { return }
+            if let app = volumeApp, let device = appOutput(of: app) {
+                soundControl.setDeviceVolume(Float(value), of: device.uid)
+            } else {
+                SystemVolume.setVolume(Float(value))
+            }
+        case .setOutputMuted:
+            guard let muted else { return }
+            if let app = volumeApp, let device = appOutput(of: app) {
+                soundControl.setDeviceMuted(muted, of: device.uid)
+            } else {
+                SystemVolume.setMuted(muted)
+            }
         }
         broadcastStateIfChanged()
+    }
+
+    /// The app whose own volume the remote changes, as SoundControl knows it: the one playback
+    /// commands go to. nil without SoundControl, and then the remote changes the Mac's volume.
+    private var volumeApp: String? {
+        guard soundControl.isConnected, let id = nowPlaying.nowPlayingID else { return nil }
+        // A web app plays through the browser it belongs to, and SoundControl only sees the browser.
+        return nowPlaying.sources.first { $0.id == id }?.parentID ?? id
+    }
+
+    private func appOutput(of app: String) -> ControlDevice? {
+        soundControl.output(of: app, systemOutputUID: AudioOutputs.currentID())
     }
 
     /// MediaRemote needs no permission; media keys (which need Accessibility) are the fallback.
@@ -261,10 +318,34 @@ final class RemoteServer: ObservableObject {
     private func currentState() -> RemoteMessage {
         let info = nowPlaying.info
         var state = RemoteMessage(kind: .state)
-        state.volume = SystemVolume.volume.map(Double.init)
-        state.muted = SystemVolume.isMuted
-        state.outputs = AudioOutputs.all()
-        state.outputID = AudioOutputs.currentID()
+        let systemOutputs = AudioOutputs.all()
+        let systemOutputID = AudioOutputs.currentID()
+        if let app = volumeApp, let settings = soundControl.settings(of: app) {
+            state.volume = Double(settings.volume)
+            state.muted = settings.muted
+            state.appVolume = true
+            let output = soundControl.output(of: app, systemOutputUID: systemOutputID)
+            state.appOutputName = output?.name
+            state.outputVolume = output?.volume.map(Double.init)
+            state.outputMuted = output?.muted
+            state.outputs = soundControl.devices.map { device in
+                AudioOutput(id: device.uid, name: device.name,
+                            kind: systemOutputs.first { $0.id == device.uid }?.kind ?? .other)
+            }
+            state.outputID = settings.device
+        } else {
+            state.volume = SystemVolume.volume.map(Double.init)
+            state.muted = SystemVolume.isMuted
+            state.outputs = systemOutputs
+            state.outputID = systemOutputID
+        }
+        if nowPlaying.canSelectSource {
+            state.sources = nowPlaying.sources.map {
+                MediaSource(id: $0.id, name: $0.name, playing: $0.isPlaying, title: $0.title)
+            }
+            state.sourceID = nowPlaying.selectedSourceID
+        }
+        state.nowPlayingID = nowPlaying.nowPlayingID
         state.playing = info?.isPlaying
         state.title = info?.title
         state.artist = info?.artist

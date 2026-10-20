@@ -11,6 +11,16 @@
         }
       }
     },
+    "Advanced sound control integration.": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tích hợp điều khiển âm thanh chuyên sâu."
+          }
+        }
+      }
+    },
     "Allow Accessibility access…": {
       "localizations": {
         "vi": {
@@ -31,12 +41,32 @@
         }
       }
     },
+    "Connected": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Đã kết nối"
+          }
+        }
+      }
+    },
     "Connected devices": {
       "localizations": {
         "vi": {
           "stringUnit": {
             "state": "translated",
             "value": "Thiết bị đang kết nối"
+          }
+        }
+      }
+    },
+    "Extensions": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tiện ích mở rộng"
           }
         }
       }
@@ -67,6 +97,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Không có"
+          }
+        }
+      }
+    },
+    "Not found": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Không tìm thấy."
           }
         }
       }

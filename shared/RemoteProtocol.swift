@@ -19,6 +19,22 @@ enum RemoteCommand: String, Codable, CaseIterable {
     case seek
     /// Uses `RemoteMessage.outputID`.
     case selectOutput
+    /// Uses `RemoteMessage.sourceID`; nil goes back to following whatever the Mac plays.
+    case selectSource
+    /// The volume of the device the sound ends up on (`outputVolume`). Uses `RemoteMessage.value` (0...1).
+    case setOutputVolume
+    /// Uses `RemoteMessage.muted`.
+    case setOutputMuted
+}
+
+/// An app on the Mac that shows up in Now Playing. Picking one makes it the app that the
+/// playback controls (and the Mac's own media keys) act on.
+struct MediaSource: Codable, Hashable, Identifiable {
+    /// Bundle identifier.
+    var id: String
+    var name: String
+    var playing: Bool
+    var title: String?
 }
 
 /// An audio output device of the Mac.
@@ -61,8 +77,25 @@ struct RemoteMessage: Codable, Equatable {
     var elapsed: Double? = nil
     var rate: Double? = nil
     /// Available outputs and the current one (in `state`), or the one to switch to (in `selectOutput`).
+    /// With `appVolume` these are the outputs of the app being controlled, and a nil `outputID` means
+    /// it follows the Mac's output; `selectOutput` without an ID goes back to that.
     var outputs: [AudioOutput]? = nil
     var outputID: String? = nil
+    /// Apps that can be picked as the source, in `state`. nil when the Mac can't offer a choice.
+    var sources: [MediaSource]? = nil
+    /// The picked source (in `state`, nil while following the Mac), or the one to pick (in `selectSource`).
+    var sourceID: String? = nil
+    /// The app the playback controls act on right now.
+    var nowPlayingID: String? = nil
+    /// True when `volume`, `muted` and the output belong to the app being controlled rather than to
+    /// the whole Mac. That needs SoundControl running on the Mac.
+    var appVolume: Bool? = nil
+    /// Where that app's sound ends up, when known.
+    var appOutputName: String? = nil
+    /// With `appVolume`: the volume of the device that app's sound ends up on (`appOutputName`), shared
+    /// with every other app playing there. nil when that device has no volume control.
+    var outputVolume: Double? = nil
+    var outputMuted: Bool? = nil
     /// JPEG cover art; nil in an `artwork` message means "no artwork".
     var artwork: Data? = nil
     var reason: String? = nil
@@ -71,8 +104,10 @@ struct RemoteMessage: Codable, Equatable {
         RemoteMessage(kind: .hello, pin: pin, deviceName: deviceName)
     }
 
-    static func command(_ command: RemoteCommand, value: Double? = nil, outputID: String? = nil) -> RemoteMessage {
-        RemoteMessage(kind: .command, command: command, value: value, outputID: outputID)
+    static func command(_ command: RemoteCommand, value: Double? = nil, muted: Bool? = nil,
+                        outputID: String? = nil, sourceID: String? = nil) -> RemoteMessage {
+        RemoteMessage(kind: .command, command: command, value: value, muted: muted, outputID: outputID,
+                      sourceID: sourceID)
     }
 
     static func artwork(_ data: Data?) -> RemoteMessage {

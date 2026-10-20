@@ -27,6 +27,8 @@ struct RemoteView: View {
         }
         .navigationTitle(client.mac.name)
         .navigationBarTitleDisplayMode(.inline)
+        // Sideways swipes belong to the artwork here (switching apps); going back is the back button.
+        .background(BackSwipeBlocker())
         .onAppear { client.connect() }
         .onDisappear { client.disconnect() }
         .onChange(of: scenePhase) { _, phase in
@@ -37,11 +39,40 @@ struct RemoteView: View {
     }
 }
 
+/// Turns off swipe-to-go-back while its screen is shown and turns it back on when leaving, so other
+/// screens keep it. SwiftUI has no switch for this, hence the view controller.
+private struct BackSwipeBlocker: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> Controller { Controller() }
+    func updateUIViewController(_ controller: Controller, context: Context) {}
+
+    final class Controller: UIViewController {
+        override func viewDidAppear(_ animated: Bool) {
+            super.viewDidAppear(animated)
+            setBackSwipeEnabled(false)
+        }
+
+        override func viewWillDisappear(_ animated: Bool) {
+            super.viewWillDisappear(animated)
+            setBackSwipeEnabled(true)
+        }
+
+        private func setBackSwipeEnabled(_ enabled: Bool) {
+            navigationController?.interactivePopGestureRecognizer?.isEnabled = enabled
+            // The swipe from anywhere on the screen, not just the edge.
+            if #available(iOS 26, *) {
+                navigationController?.interactiveContentPopGestureRecognizer?.isEnabled = enabled
+            }
+        }
+    }
+}
+
 /// Fixed layout: everything below the artwork has a constant height, so controls never move
 /// because of the track (long titles scroll, missing info keeps its space). The artwork takes
 /// whatever height is left, which depends only on the screen.
 ///
-/// Tapping the artwork switches between the cover and a spinning disc.
+/// Tapping the artwork switches between the cover and a spinning disc. Swiping the player sideways
+/// moves to the previous or next app playing media on the Mac: the whole player slides out and the
+/// next one slides in, with a disc of another color.
 private struct ControlsView: View {
     @ObservedObject var client: RemoteClient
     @AppStorage("showsDisc") private var showsDisc = false
@@ -54,30 +85,45 @@ private struct ControlsView: View {
     @State private var previousTaps = 0
     @State private var playTaps = 0
     @State private var nextTaps = 0
+    /// How far the player follows the finger while swiping to another app.
+    @State private var swipeOffset: CGFloat = 0
+    @State private var playerWidth: CGFloat = 0
 
     var body: some View {
         VStack(spacing: 0) {
-            artwork
-                .frame(maxWidth: 360, maxHeight: .infinity)
-                .padding(.horizontal, 32)
-                .padding(.top, 16)
-                .padding(.bottom, 24)
-
-            VStack(spacing: 20) {
-                NowPlayingView(client: client)
-                ScrubberView(client: client, duration: client.duration)
-                transportControls
-                volumeSlider
+            if let sources = client.sources, !sources.isEmpty {
+                SourceDots(client: client, sources: sources)
+                    .padding(.top, 8)
             }
-            .padding(.horizontal, 32)
-            .padding(.bottom, 16)
+
+            VStack(spacing: 0) {
+                artwork
+                    .frame(maxWidth: 360, maxHeight: .infinity)
+                    .padding(.horizontal, 32)
+                    .padding(.top, 16)
+                    .padding(.bottom, 24)
+
+                VStack(spacing: 20) {
+                    NowPlayingView(client: client)
+                    ScrubberView(client: client, duration: client.duration)
+                    transportControls
+                    volumeSlider
+                }
+                .padding(.horizontal, 32)
+                .padding(.bottom, 16)
+            }
+            .contentShape(Rectangle())
+            .offset(x: swipeOffset)
+            // The sliders and the scrubber keep their own drags; a swipe anywhere else switches apps.
+            .gesture(sourceSwipe)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { playerWidth = $0 }
         }
         .sensoryFeedback(.impact(weight: .light), trigger: tapCount)
         .sensoryFeedback(.selection, trigger: showsDisc)
         .toolbar {
-            if client.outputs.count > 1 {
+            if client.outputs.count > 1 || client.appVolume && !client.outputs.isEmpty {
                 ToolbarItem(placement: .topBarTrailing) {
-                    OutputPicker(client: client)
+                    OutputButton(client: client)
                 }
             }
         }
@@ -90,6 +136,9 @@ private struct ControlsView: View {
         }
         .onChange(of: client.isPlaying) { _, playing in
             discSpin.setPlaying(playing == true)
+        }
+        .onChange(of: client.currentSourceID) { _, _ in
+            discStyle = DiscStyle.allCases.filter { $0 != discStyle }.randomElement()!
         }
     }
 
@@ -112,6 +161,40 @@ private struct ControlsView: View {
         .accessibilityElement()
         .accessibilityLabel("Artwork")
         .accessibilityAddTraits(.isButton)
+    }
+
+    private var sourceSwipe: some Gesture {
+        DragGesture(minimumDistance: 20)
+            .onChanged { value in
+                guard (client.sources?.count ?? 0) > 1,
+                      abs(value.translation.width) > abs(value.translation.height) else { return }
+                // Follows the finger, more stiffly where there's no app to go to.
+                let step = value.translation.width < 0 ? 1 : -1
+                swipeOffset = value.translation.width * (client.canSelectAdjacentSource(step) ? 0.6 : 0.2)
+            }
+            .onEnded { value in
+                let width = value.predictedEndTranslation.width
+                let step = width < 0 ? 1 : -1
+                guard (client.sources?.count ?? 0) > 1, abs(width) > 80,
+                      abs(value.translation.width) > abs(value.translation.height),
+                      client.selectAdjacentSource(step) else {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) { swipeOffset = 0 }
+                    return
+                }
+                slideToNextPlayer(towards: step > 0 ? -1 : 1)
+            }
+    }
+
+    /// Slides the player out on one side and the next one in from the other, like turning a page.
+    private func slideToNextPlayer(towards direction: CGFloat) {
+        let distance = max(playerWidth, 300)
+        withAnimation(.easeIn(duration: 0.14)) { swipeOffset = direction * distance }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.14) {
+            var jump = Transaction()
+            jump.disablesAnimations = true
+            withTransaction(jump) { swipeOffset = -direction * distance }
+            withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) { swipeOffset = 0 }
+        }
     }
 
     private var transportControls: some View {
@@ -138,11 +221,12 @@ private struct ControlsView: View {
         }
     }
 
-    /// Always shown; disabled when the Mac's output has no software volume (e.g. HDMI).
+    /// Always shown; disabled when the Mac's output has no software volume (e.g. HDMI). With SoundControl
+    /// on the Mac it's the volume of the app being controlled.
+    /// The speaker toggles mute. Muted, the slider turns gray but stays usable: moving it unmutes.
     private var volumeSlider: some View {
         HStack(spacing: 12) {
-            Image(systemName: "speaker.fill")
-                .foregroundStyle(.secondary)
+            MuteButton(muted: client.muted) { client.send(.toggleMute) }
             Slider(value: $sliderValue, in: 0...1) { editing in
                 isDragging = editing
                 if !editing { client.send(.setVolume, value: sliderValue) }
@@ -150,11 +234,12 @@ private struct ControlsView: View {
             .onChange(of: sliderValue) { _, value in
                 if isDragging { client.send(.setVolume, value: value) }
             }
+            .tint(client.muted ? Color.secondary : Color.accentColor)
             Image(systemName: "speaker.wave.3.fill")
                 .foregroundStyle(.secondary)
         }
         .disabled(client.volume == nil)
-        .opacity(client.volume == nil || client.muted ? 0.4 : 1)
+        .opacity(client.volume == nil ? 0.4 : 1)
     }
 
     private var playButtonSymbol: String {
@@ -183,6 +268,74 @@ private struct ControlsView: View {
     private func send(_ command: RemoteCommand) {
         tapCount += 1
         client.send(command)
+    }
+}
+
+/// One dot per app playing media on the Mac, in the order the Mac lists them. The longer dot is the app
+/// the controls act on, with its name below: the one picked by swiping the artwork or tapping a dot, or
+/// before that (and again once the Mac is used to play something else) whatever the Mac itself follows.
+/// Picking an app also points the Mac's own media keys at it.
+private struct SourceDots: View {
+    @ObservedObject var client: RemoteClient
+    let sources: [MediaSource]
+
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 6) {
+                ForEach(sources) { source in
+                    let current = source.id == client.currentSourceID
+                    Capsule()
+                        .fill(current ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
+                        .frame(width: current ? 20 : 7, height: 7)
+                        .contentShape(Rectangle().inset(by: -8))
+                        .onTapGesture { client.selectSource(source.id) }
+                }
+            }
+            .animation(.snappy, value: client.currentSourceID)
+
+            Text(verbatim: currentName ?? " ")
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .contentTransition(.opacity)
+                .animation(.default, value: currentName)
+        }
+        .sensoryFeedback(.selection, trigger: client.sourceID)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: currentName ?? ""))
+        .accessibilityValue(Text(verbatim: "\((currentIndex ?? 0) + 1)/\(sources.count)"))
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: client.selectAdjacentSource(1)
+            case .decrement: client.selectAdjacentSource(-1)
+            @unknown default: break
+            }
+        }
+    }
+
+    private var currentIndex: Int? {
+        sources.firstIndex { $0.id == client.currentSourceID }
+    }
+
+    private var currentName: String? {
+        currentIndex.map { sources[$0].name }
+    }
+}
+
+/// The speaker at the quiet end of a volume slider; tapping it mutes or unmutes.
+private struct MuteButton: View {
+    let muted: Bool
+    let toggle: () -> Void
+
+    var body: some View {
+        Button(action: toggle) {
+            Image(systemName: muted ? "speaker.slash.fill" : "speaker.fill")
+                .foregroundStyle(muted ? Color.accentColor : .secondary)
+                .frame(width: 24)
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel(muted ? Text("Unmute") : Text("Mute"))
     }
 }
 
@@ -459,22 +612,120 @@ private struct ScrubberView: View {
     }
 }
 
-/// Picks the Mac's sound output, like the AirPlay button.
-private struct OutputPicker: View {
+/// Opens the output sheet. Its icon shows the device the sound is playing on.
+private struct OutputButton: View {
     @ObservedObject var client: RemoteClient
+    @State private var showsSheet = false
 
     var body: some View {
-        Menu {
-            Picker("Sound output", selection: Binding(get: { client.outputID ?? "" }, set: { client.selectOutput($0) })) {
-                ForEach(client.outputs) { output in
-                    Label(output.name, systemImage: Self.symbol(for: output.kind))
-                        .tag(output.id)
-                }
-            }
+        Button {
+            showsSheet = true
         } label: {
-            Image(systemName: Self.symbol(for: client.outputs.first { $0.id == client.outputID }?.kind ?? .other))
+            Image(systemName: OutputSheet.symbol(for: OutputSheet.currentKind(client)))
         }
         .accessibilityLabel("Sound output")
+        .sheet(isPresented: $showsSheet) {
+            OutputSheet(client: client)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
+    }
+}
+
+/// Where the sound goes and how loud that device is, like the AirPlay sheet. With SoundControl on the
+/// Mac both are about the app being controlled: pick its device (or let it follow the Mac) and set that
+/// device's own volume, which every app playing there shares. Without it, just the Mac's output.
+private struct OutputSheet: View {
+    @ObservedObject var client: RemoteClient
+    @State private var sliderValue = 0.0
+    @State private var isDragging = false
+
+    var body: some View {
+        List {
+            Section {
+                if client.appVolume {
+                    row(id: nil, name: String(localized: "Follow system"), symbol: "laptopcomputer")
+                }
+                ForEach(client.outputs) { output in
+                    row(id: output.id, name: output.name, symbol: Self.symbol(for: output.kind))
+                }
+            }
+
+            // Without SoundControl this would be the Mac's volume, which the player already has.
+            if client.appVolume {
+                Section {
+                    volumeRow
+                } header: {
+                    if let name = client.appOutputName {
+                        Label(name, systemImage: Self.symbol(for: Self.currentKind(client)))
+                            .textCase(nil)
+                    }
+                } footer: {
+                    if client.outputVolume == nil {
+                        Text("This device has no volume control.")
+                    }
+                }
+            }
+        }
+        .onAppear { sliderValue = client.outputVolume ?? 0 }
+        .onChange(of: client.outputVolume) { _, volume in
+            if !isDragging, let volume { sliderValue = volume }
+        }
+    }
+
+    private func row(id: String?, name: String, symbol: String) -> some View {
+        Button {
+            client.selectOutput(id)
+        } label: {
+            HStack {
+                Label {
+                    Text(verbatim: name)
+                        .foregroundStyle(Color.primary)
+                } icon: {
+                    Image(systemName: symbol)
+                }
+                Spacer()
+                if client.outputID == id {
+                    Image(systemName: "checkmark")
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.accentColor)
+                }
+            }
+        }
+    }
+
+    // MARK: - Volume of the device
+
+    private var volumeRow: some View {
+        HStack(spacing: 12) {
+            MuteButton(muted: client.outputMuted) {
+                client.setOutputMuted(!client.outputMuted)
+            }
+
+            Slider(value: $sliderValue, in: 0...1) { editing in
+                isDragging = editing
+                if !editing { client.setOutputVolume(sliderValue) }
+            }
+            .onChange(of: sliderValue) { _, value in
+                if isDragging { client.setOutputVolume(value) }
+            }
+            .tint(client.outputMuted ? Color.secondary : Color.accentColor)
+
+            Image(systemName: "speaker.wave.3.fill")
+                .foregroundStyle(.secondary)
+        }
+        .disabled(client.outputVolume == nil)
+        .padding(.vertical, 4)
+    }
+
+    // MARK: - Icons
+
+    /// The device the sound is playing on: for an app, wherever it ends up (also when it follows the Mac).
+    static func currentKind(_ client: RemoteClient) -> AudioOutput.Kind {
+        let current = client.appVolume
+            ? client.outputs.first { $0.name == client.appOutputName }
+            : client.outputs.first { $0.id == client.outputID }
+        return current?.kind ?? .other
     }
 
     static func symbol(for kind: AudioOutput.Kind) -> String {

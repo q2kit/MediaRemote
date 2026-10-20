@@ -22,6 +22,13 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         return item
     }()
     private lazy var devicesItem = hostedItem(MenuDevicesRow())
+    private let extensionsSubmenu = NSMenu()
+    private lazy var extensionsItem: NSMenuItem = {
+        let item = NSMenuItem(title: String(localized: "Extensions"), action: nil, keyEquivalent: "")
+        item.submenu = extensionsSubmenu
+        extensionsSubmenu.addItem(hostedItem(SoundControlExtensionRow(link: server.soundControl), minimumWidth: 0))
+        return item
+    }()
 
     init(server: RemoteServer) {
         self.server = server
@@ -86,6 +93,8 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         if let error = launchAtLogin.error {
             submenu.addItem(disabledItem(error))
         }
+        submenu.addItem(.separator())
+        submenu.addItem(extensionsItem)
     }
 
     // MARK: - Actions

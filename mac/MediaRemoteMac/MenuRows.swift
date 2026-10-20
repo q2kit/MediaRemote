@@ -183,6 +183,69 @@ struct MenuToggleRow: View {
     }
 }
 
+/// Settings › Extensions › SoundControl. Turns the integration with SoundControl on or off, says what it
+/// does, and whether SoundControl is there to talk to.
+struct SoundControlExtensionRow: View {
+    @ObservedObject var link: SoundControlLink
+
+    @State private var isHovered = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 0) {
+                Text(verbatim: "SoundControl")
+                    .fontWeight(.medium)
+                Spacer(minLength: 12)
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 14))
+                    .symbolRenderingMode(.hierarchical)
+                    .opacity(link.isEnabled ? 1 : 0)
+            }
+            .font(.system(size: NSFont.systemFontSize))
+
+            Text("Advanced sound control integration.")
+                .font(.caption)
+                .opacity(isHovered ? 0.85 : 1)
+                .foregroundStyle(isHovered ? Color.white : Color.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(statusColor)
+                    .frame(width: 6, height: 6)
+                status
+            }
+            .font(.caption)
+            .foregroundStyle(isHovered ? Color.white : Color.secondary)
+        }
+        .foregroundStyle(isHovered ? Color.white : Color.primary)
+        .frame(width: 250, alignment: .leading)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 5)
+        .background {
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .fill(isHovered ? Color(nsColor: .selectedContentBackgroundColor) : .clear)
+        }
+        .padding(.horizontal, 5)
+        .padding(.vertical, 1)
+        .contentShape(Rectangle())
+        .onHover { isHovered = $0 }
+        .onTapGesture { link.isEnabled.toggle() }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityValue(link.isEnabled ? Text("On") : Text("Off"))
+    }
+
+    private var status: Text {
+        if !link.isEnabled { return Text("Off") }
+        return link.isConnected ? Text("Connected") : Text("Not found")
+    }
+
+    private var statusColor: Color {
+        !link.isEnabled ? .gray : link.isConnected ? .green : .orange
+    }
+}
+
 /// "Open at login", following `LaunchAtLogin` live.
 struct OpenAtLoginRow: View {
     @ObservedObject var launchAtLogin = LaunchAtLogin.shared
