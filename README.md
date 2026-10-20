@@ -52,6 +52,16 @@ docs/        Ảnh chụp màn hình cho README
 - Xcode 16 trở lên (project dùng file-system synchronized groups)
 - macOS 14+, iOS 17+
 
+## Tải bản Mac
+
+Tải `MediaRemoteMac.zip` từ [bản phát hành mới nhất của ứng dụng Mac](https://github.com/q2kit/MediaRemote/releases) (tag `mac-v…`), giải nén rồi chuyển **MediaRemoteMac.app** vào Applications. Ứng dụng iPhone chưa có bản dựng sẵn, vẫn cài từ Xcode như phần Build bên dưới.
+
+Bản phát hành chưa được Apple notarize, nên lần đầu mở macOS sẽ chặn. Mở *System Settings → Privacy & Security*, kéo xuống và bấm **Open Anyway**, hoặc chạy một lần trong Terminal:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/MediaRemoteMac.app
+```
+
 ## Build
 
 Mở `mac/MediaRemoteMac.xcodeproj` và `iphone/MediaRemote.xcodeproj` trong Xcode rồi Run như bình thường. Target `MediaRemoteHelper` được build và nhúng tự động vào ứng dụng Mac.
@@ -78,6 +88,15 @@ open -n MediaRemoteMac.app --args -serviceName "MacBook Pro" -pairingPIN 123456
 - Bundle ID mặc định là `com.q2k.MediaRemote` và `com.q2k.MediaRemoteMac`; đổi sang ID của bạn trước khi chạy trên máy thật.
 - Chọn **Team** cho target iPhone để cài lên máy. Dùng Apple ID miễn phí (Personal Team) được, nhưng ứng dụng hết hạn sau 7 ngày và không có push notification.
 - Nên chọn Team cho cả `MediaRemoteMac` và `MediaRemoteHelper`. Khi ký ad-hoc, chữ ký đổi sau mỗi lần build nên macOS coi là ứng dụng mới và quyền Trợ năng bị mất.
+
+### Phát hành (chỉ ứng dụng Mac)
+
+CI (`.github/workflows/build-macos.yml`) chỉ build và phát hành **ứng dụng Mac**; ứng dụng iPhone chưa nằm trong CI, khi nào làm sẽ có workflow và tag riêng.
+
+- Mỗi pull request vào `main` có thay đổi trong `mac/`, `shared/` hoặc chính workflow đó đều được build để chắc chắn còn biên dịch được.
+- Pull request như vậy phải nâng phiên bản ứng dụng Mac: *target MediaRemoteMac → General → Version* (`MARKETING_VERSION`). Bước kiểm tra sẽ báo lỗi nếu phiên bản đó đã phát hành.
+- Khi merge, CI phát hành `mac-v<phiên bản>` kèm `MediaRemoteMac.zip`. Số build là số lần chạy CI.
+- Bản phát hành được ký bằng chứng chỉ tự ký lưu trong secrets `SIGNING_CERTIFICATE_P12` (file .p12 mã hoá base64) và `SIGNING_CERTIFICATE_PASSWORD`, để các bản sau vẫn được macOS nhận là cùng một ứng dụng và giữ quyền Trợ năng, Mạng cục bộ. Chưa có secrets thì CI ký ad-hoc và báo cảnh báo.
 
 ## Quyền truy cập
 
