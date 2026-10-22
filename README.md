@@ -54,7 +54,7 @@ docs/        Ảnh chụp màn hình cho README
 
 ## Tải bản Mac
 
-Tải `MediaRemoteMac.zip` từ [bản phát hành mới nhất của ứng dụng Mac](https://github.com/q2kit/MediaRemote/releases) (tag `mac-v…`), giải nén rồi chuyển **MediaRemoteMac.app** vào Applications. Ứng dụng iPhone chưa có bản dựng sẵn, vẫn cài từ Xcode như phần Build bên dưới.
+Tải `MediaRemoteMac.zip` từ [bản phát hành mới nhất của ứng dụng Mac](https://github.com/q2kit/MediaRemote/releases) (tag `mac-v…`), giải nén rồi chuyển **MediaRemoteMac.app** vào Applications. Bản này là universal binary, chạy trên cả Mac Apple Silicon (arm64) và Intel (x86_64). Ứng dụng iPhone chưa có bản dựng sẵn, vẫn cài từ Xcode như phần Build bên dưới.
 
 Bản phát hành chưa được Apple notarize, nên lần đầu mở macOS sẽ chặn. Mở *System Settings → Privacy & Security*, kéo xuống và bấm **Open Anyway**, hoặc chạy một lần trong Terminal:
 
@@ -95,7 +95,7 @@ CI (`.github/workflows/build-macos.yml`) chỉ build và phát hành **ứng d�
 
 - Mỗi pull request vào `main` có thay đổi trong `mac/`, `shared/` hoặc chính workflow đó đều được build để chắc chắn còn biên dịch được.
 - Pull request như vậy phải nâng phiên bản ứng dụng Mac: *target MediaRemoteMac → General → Version* (`MARKETING_VERSION`). Bước kiểm tra sẽ báo lỗi nếu phiên bản đó đã phát hành.
-- Khi merge, CI phát hành `mac-v<phiên bản>` kèm `MediaRemoteMac.zip`. Số build là số lần chạy CI.
+- Khi merge, CI phát hành `mac-v<phiên bản>` kèm `MediaRemoteMac.zip` universal (arm64 + x86_64), đồng thời kiểm tra cả `MediaRemoteMac` và `libMediaRemoteHelper.dylib` đều có đủ hai kiến trúc. Số build là số lần chạy CI.
 - Bản phát hành được ký bằng chứng chỉ tự ký lưu trong secrets `SIGNING_CERTIFICATE_P12` (file .p12 mã hoá base64) và `SIGNING_CERTIFICATE_PASSWORD`, để các bản sau vẫn được macOS nhận là cùng một ứng dụng và giữ quyền Trợ năng, Mạng cục bộ. Chưa có secrets thì CI ký ad-hoc và báo cảnh báo.
 
 ## Quyền truy cập

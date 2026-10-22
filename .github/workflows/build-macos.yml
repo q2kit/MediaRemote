@@ -59,10 +59,13 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      # Builds the helper dylib too: the app target depends on it and embeds it in Contents/Frameworks.
+      # Builds a universal app (Apple Silicon + Intel). The helper dylib is built too because the app
+      # target depends on it and embeds it in Contents/Frameworks. The generic destination is what makes
+      # it universal: without one, xcodebuild picks the runner's own Mac and builds only arm64, ARCHS or not.
       - name: Build
         run: |
           xcodebuild -project mac/MediaRemoteMac.xcodeproj -scheme MediaRemoteMac -configuration Release \
+            -destination 'generic/platform=macOS' \
             -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO \
             CURRENT_PROJECT_VERSION=${{ github.run_number }} \
             build
@@ -107,6 +110,20 @@ jobs:
         if: always()
         run: security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2>/dev/null || true
 
+      - name: Verify macOS architectures
+        run: |
+          app=build/DerivedData/Build/Products/Release/MediaRemoteMac.app
+          app_binary="$app/Contents/MacOS/MediaRemoteMac"
+          helper="$app/Contents/Frameworks/libMediaRemoteHelper.dylib"
+          for binary in "$app_binary" "$helper"; do
+            info=$(lipo -info "$binary")
+            echo "$info"
+            if [[ "$info" != *"arm64"* || "$info" != *"x86_64"* ]]; then
+              echo "::error::Missing arm64/x86_64 slice in $binary"
+              exit 1
+            fi
+          done
+
       - name: Package
         run: ditto -c -k --keepParent build/DerivedData/Build/Products/Release/MediaRemoteMac.app MediaRemoteMac.zip
 
@@ -135,6 +152,6 @@ jobs:
           gh release create "mac-v$VERSION" MediaRemoteMac.zip \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title "Media Remote for Mac $VERSION" --generate-notes \
-            --notes "The Mac app. Unzip and move **MediaRemoteMac.app** to Applications, then install the iPhone app from Xcode.
+            --notes "The Mac app (universal: Apple Silicon + Intel). Unzip and move **MediaRemoteMac.app** to Applications, then install the iPhone app from Xcode.
 
           This build isn't notarized, so macOS blocks it the first time. Open it once, then go to *System Settings → Privacy & Security* and click **Open Anyway**. Or run \`xattr -dr com.apple.quarantine /Applications/MediaRemoteMac.app\` in Terminal."
